@@ -1,0 +1,160 @@
+<!-- This is a demonstration of the mnist data set in a web browser.
+For this I use the Tensorflow.js library. It works on Windows XP 32bits
+with only 1Gb of RAM and without GPU.
+To load the page, double click on the file index.html -->
+
+<html>
+<head>
+<title>mnist Demo</title>
+
+<!-- You must include the Tensorflow.js library -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+
+<!-- .Then the mnist data set specially adapted to javascript is included.
+You can install it with: (bower install mnist) in a console window from the root proyect directory.
+This creates some folders where you can link mnist.js  -->
+<script src="bower_components/mnist/dist/mnist.js"></script>
+
+<!-- Important! We also include the library async.js that helps us to manage the method (model.fit)
+that is in charge of training the model. For old browsers we can not use async / await for functions.
+The model.fit method in Tensorflow.js is asynchronous, which is why we adapt it to simulate a synchronic behavior. -->
+<script src="bower_components/async/dist/async.js"></script>
+
+<script type="text/javascript">
+ 
+// This is the main function that will be executed when the page is loaded.
+function start() {    
+    
+    // This loads 2000 images to train and 100 images for test.
+    // Then you can use less to training and test to reduce the time.
+    var set = mnist.set(2000, 100);
+
+    var trainingSet = set.training;
+    var testSet = set.test;    
+    
+    // This part is taken from the tutorial of Tensorflow.js for initialice the model and the layers of the network.
+    // The layers and their parameters are well explained in the tutorial. Take a look.
+    var model = tf.sequential();
+    
+    model.add(tf.layers.conv2d({
+        inputShape: [28, 28, 1],
+        kernelSize: 5,
+        filters: 8,
+        strides: 1,
+        activation: 'relu',
+        kernelInitializer: 'VarianceScaling'
+      }));
+    
+    model.add(tf.layers.maxPooling2d({
+        poolSize: [2, 2],
+        strides: [2, 2]
+      }));
+    
+    model.add(tf.layers.conv2d({
+        kernelSize: 5,
+        filters: 16,
+        strides: 1,
+        activation: 'relu',
+        kernelInitializer: 'VarianceScaling'
+      }));
+      
+      model.add(tf.layers.maxPooling2d({
+        poolSize: [2, 2],
+        strides: [2, 2]
+      }));
+      
+    model.add(tf.layers.flatten());
+    
+    model.add(tf.layers.dense({
+        units: 10,
+        kernelInitializer: 'VarianceScaling',
+        activation: 'softmax'
+      }));    
+    
+    // Here all the components of the model are united.
+    model.compile({
+        optimizer: 'sgd',
+        loss: 'categoricalCrossentropy',
+        metrics: ['accuracy'],
+      });
+    
+    var input;
+    var label;
+    var count = 0;
+    var OutPos = 0;
+    var Matches = 0;
+    
+    // Maybe this is the hardest part of understanding how it works.
+    // We use the function async.whilst () of the library async.js to simulate
+    // a synchronic behavior of the fit () method that is in charge of training the model.
+    // When you finish running the loop with whilst, the network is ready to test images and make predictions.    
+    async.whilst(
+        
+        //This executes the loop over 1500 images of the training set.
+        function() { return count < 1500; },
+        function(callback) {
+            count++;
+            
+            // We trick the image that is a normal array of 784 elements (floats) and we turn it into a 4D Tensor
+            // with which we feed the model introducing the images one by one.
+            input = tf.tensor4d(trainingSet[count].input, [1, 28, 28, 1]);
+            
+            // We introduce the categories that go from 0 to 9 in a 2D Tensor.
+            label = tf.tensor2d(trainingSet[count].output, [1, 10]);            
+            
+            // We train the model.
+            model.fit(input, label,{epochs:1});
+            
+            // To open the browser console, it is usually done with the right button of the mouse and selecting Inspector.
+            // I recommend you open it before to see what is happening.
+            console.log('Count: ' + count);
+            setTimeout(function() {
+                callback(null, count);
+            },10);            
+        },
+        function (err, n) {
+            
+            //When the training is finished, the network is ready to make predictions with the test set.
+            console.log('Testing')
+            
+            // We take 50 test images
+            for ( var i = 0; i < 50; i++){            
+                
+                //We make the prediction of the image and return the class (from 0 to 9)
+                var output = model.predict(tf.tensor4d(testSet[i].input, [1, 28, 28, 1]));
+                var prediction = Array.from(output.argMax(1).dataSync());
+                console.log(prediction[0]);
+                
+                // We take the label where are the class
+                console.log(testSet[i].output);
+                for ( var k = 0; k < 10; k++){
+                    if (testSet[i].output[k] == 1) {
+                        OutPos = k;            
+                    }
+                }
+                
+                // We compare the prediction of the image with its corresponding class.
+                // If they coincide, we have found a success.
+                if (prediction ==  OutPos) {
+                    Matches++;
+                }
+            }
+            // In the end we count all the coincidences and we can get the percentage of hits.
+            console.log('Matches: ' + Matches);
+            
+            // In my case I got around 90% It is not very high, but it can be improved
+            // by increasing the training with more images.
+        }
+    );    
+    
+    alert('Start predictions...')
+  
+}
+ 
+</script>
+</head>
+ 
+<body onload="start()">
+<div id="test"></div>
+</body>
+</html>
